@@ -38,6 +38,9 @@ from ppocr.utils.utility import set_seed
 from ppocr.modeling.architectures import apply_to_static
 import tools.program as program
 
+
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE" #测试环境中加上，正式环境中去掉
+
 dist.get_world_size()
 
 

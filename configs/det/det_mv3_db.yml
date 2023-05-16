@@ -1,21 +1,22 @@
 Global:
-  use_gpu: true
+  use_gpu: false
   use_xpu: false
   use_mlu: false
   epoch_num: 1200
   log_smooth_window: 20
   print_batch_step: 10
-  save_model_dir: ./output/db_mv3/
+  save_model_dir: ./work/output/db_mv3/
   save_epoch_step: 1200
   # evaluation is run every 2000 iterations
   eval_batch_step: [0, 2000]
   cal_metric_during_train: False
-  pretrained_model: ./pretrain_models/MobileNetV3_large_x0_5_pretrained
+#  pretrained_model: ./work/pretrain_models/MobileNetV3_large_x0_5_pretrained
+  pretrained_model: ./work/pretrain_models/ch_PP-OCRv3_det_distill_train/best_accuracy.pdparams
   checkpoints:
   save_inference_dir:
   use_visualdl: False
   infer_img: doc/imgs_en/img_10.jpg
-  save_res_path: ./output/det_db/predicts_db.txt
+  save_res_path: ./work/output/det_db/predicts_db.txt
 
 Architecture:
   model_type: det
@@ -64,9 +65,9 @@ Metric:
 Train:
   dataset:
     name: SimpleDataSet
-    data_dir: ./train_data/icdar2015/text_localization/
+    data_dir: ./work/train_data/icdar2015/text_localization/
     label_file_list:
-      - ./train_data/icdar2015/text_localization/train_icdar2015_label.txt
+      - ./work/train_data/icdar2015/text_localization/train_icdar2015_label.txt
     ratio_list: [1.0]
     transforms:
       - DecodeImage: # load image
@@ -75,8 +76,8 @@ Train:
       - DetLabelEncode: # Class handling label
       - IaaAugment:
           augmenter_args:
-            - { 'type': Fliplr, 'args': { 'p': 0.5 } }
-            - { 'type': Affine, 'args': { 'rotate': [-10, 10] } }
+            - { 'type': Fliplr, 'args': { 'p': 0.5 } } #图像左右翻转
+            - { 'type': Affine, 'args': { 'rotate': [-10, 10] } } #图像旋转
             - { 'type': Resize, 'args': { 'size': [0.5, 3] } }
       - EastRandomCropData:
           size: [640, 640]
@@ -107,9 +108,9 @@ Train:
 Eval:
   dataset:
     name: SimpleDataSet
-    data_dir: ./train_data/icdar2015/text_localization/
+    data_dir: ./work/train_data/icdar2015/text_localization/
     label_file_list:
-      - ./train_data/icdar2015/text_localization/test_icdar2015_label.txt
+      - ./work/train_data/icdar2015/text_localization/test_icdar2015_label.txt
     transforms:
       - DecodeImage: # load image
           img_mode: BGR
