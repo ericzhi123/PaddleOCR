@@ -1,14 +1,40 @@
 import win32gui
+import win32api
 import win32ui
 import win32con
-import win32api
 import win32print
+import time
+from PIL import Image
+
+
+def get_all_hwnd(hwnd, hwnd_title):
+    if win32gui.IsWindow(hwnd) and win32gui.IsWindowEnabled(hwnd) and win32gui.IsWindowVisible(hwnd):
+        hwnd_title.update({hwnd: win32gui.GetWindowText(hwnd)})
+
+def get_app_hwnd(win_title):
+    hwnd_title = dict()
+    # 程序会打印窗口的hwnd和title，有了title就可以进行截图了。
+    hwnd_app = 0
+    win32gui.EnumWindows(get_all_hwnd, hwnd_title)
+    for h, t in hwnd_title.items():
+        if t != "":
+            print(h, t)
+        if t == win_title:
+            hwnd_app = h
+    return hwnd_app
+
 
 # 局部截图
 def window_capturex():
     proportion = round(
         win32print.GetDeviceCaps(win32gui.GetDC(0), win32con.DESKTOPHORZRES) / win32api.GetSystemMetrics(0), 2)
     print(proportion)
+
+    hwnd_target = get_app_hwnd("ITMS2019新群")
+    if hwnd_target != 0:
+        win32gui.SetForegroundWindow(hwnd_target)
+        time.sleep(0.5)
+
     left, top, right, bot = win32gui.GetWindowRect(win32gui.GetForegroundWindow())
     left = int(left * proportion)
     top = int(top * proportion)
@@ -23,11 +49,22 @@ def window_capturex():
     saveBitMap.CreateCompatibleBitmap(mfcDC, w, h)
     saveDC.SelectObject(saveBitMap)
     saveDC.BitBlt((0, 0), (w, h), mfcDC, (left, top), win32con.SRCCOPY)
+
+    bmpinfo = saveBitMap.GetInfo()
+    bmpstr = saveBitMap.GetBitmapBits(True)
+    im = Image.frombuffer(
+        'RGB',
+        (bmpinfo['bmWidth'], bmpinfo['bmHeight']),
+        bmpstr, 'raw', 'BGRX', 0, 1) #将BGRX颜色格式转换为RGB格式，便于后续处理
+    im.save("test.png")
+
+    '''
     try:
         saveBitMap.SaveBitmapFile(saveDC, "tempcap.bmp")
     except Exception as e:
         print("错误")
         pass
+    '''
     win32gui.DeleteObject(saveBitMap.GetHandle())
     saveDC.DeleteDC()
     mfcDC.DeleteDC()
@@ -76,7 +113,7 @@ def get_real_resolution():
     proportion = round(w / h, 2)
     return w, h
 
+
 if __name__ == '__main__':
-    hwnd = win32gui.FindWindow(None, 'QQ')
     # window_capture()
     window_capturex()
