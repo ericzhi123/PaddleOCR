@@ -9,6 +9,10 @@ from ppocr.utils.logging import get_logger
 
 logger = get_logger()
 
+#func_flag：0，'选择成员列表区域'；1，'选择聊天窗口区域'
+FUNC_SELECT_MEMBER_LIST = 0 #选择成员列表区域
+FUNC_SELECT_DIALOG_WINDOW = 1 #选择聊天窗口区域
+
 
 class TextInputWidget(QTextEdit):
     '''在截图区域内的文本输入框'''
@@ -162,9 +166,7 @@ class ScreenShotToolBar(QToolBar):
         self.addSeparator()
         self.addAction(QAction(QIcon(r"img/sys/logout.png"), '退出', self, triggered=self.god.close))
         self.addAction(
-            QAction(QIcon(r"img/chat/download.png"), '选择对话窗口', self, triggered=lambda: self.beforeSave('dialog')))
-        self.addAction(QAction(QIcon(r"img/chat/sendImg.png"), '选择成员列表窗口', self,
-                               triggered=lambda: self.beforeSave('members')))
+            QAction(QIcon(r"img/chat/download.png"), '确定选择区域', self, triggered=lambda: self.beforeSave('confirm')))
         self.actionTriggered.connect(self.onActionTriggered)
 
     def curLineWidth(self):
@@ -249,10 +251,8 @@ class ScreenShotToolBar(QToolBar):
             self.god.save2Local()
         elif target == 'clipboard':
             self.god.save2Clipboard()
-        elif target == 'dialog':
-            self.god.select_dialog()
-        elif target == 'members':
-            self.god.select_members()
+        elif target == 'confirm': #确定选择区域
+            self.god.confirm_select_area()
             # self.god.save2Clipboard() #测试用
 
     def enterEvent(self, event):
@@ -289,7 +289,7 @@ class ScreenArea(QtCore.QObject):
     def captureScreen(self):
         '''抓取整个屏幕的截图'''
         # screen = QtGui.QGuiApplication.primaryScreen()
-        self._screenPixmap = QApplication.primaryScreen().grabWindow() #显示器实际分辨率下的画布，如1920*1080尺寸。
+        self._screenPixmap = QApplication.primaryScreen().grabWindow()  # 显示器实际分辨率下的画布，如1920*1080尺寸。
         self._pixelRatio = self._screenPixmap.devicePixelRatio()  # 设备像素比
         logger.info("设备像素比: {}".format(self._pixelRatio))
         self._rt_screen = self.screenLogicalRectF()
@@ -394,6 +394,7 @@ class ScreenArea(QtCore.QObject):
     '''在ScreenShotWidget类的鼠标左键按下事件会调用此方法，初始化起始点坐标。在鼠标移动事件中会调用setEndPoint()方法，更新结束点坐标。
     QPointF获取的是逻辑坐标，例如1920*1080分辨率的屏幕，屏幕放大倍数1.25，则在屏幕最右上角的点用QPointF获取到的坐标大约为（1920/1.25，0/1.25）。
     人眼看到的屏幕效果实际是逻辑屏幕的效果，是物理屏幕分辨率的图像乘以放大倍数后的显示效果，用QPointF划定截屏坐标就是逻辑屏幕中的人眼看到的位置'''
+
     def setCenterArea(self, start, end):
 
         self._pt_start = start
@@ -776,12 +777,14 @@ class ScreenShotWidget(QWidget):
         self.screenArea = ScreenArea(self)
         self.toolbar = ScreenShotToolBar(self)
         self.textInputWg = TextInputWidget(self)
+        self._func_flag=FUNC_SELECT_DIALOG_WINDOW
         # 设置 screenPixmap 为窗口背景
         # palette = QtGui.QPalette()
         # palette.setBrush(QtGui.QPalette.ColorRole.Window, QtGui.QBrush(self.screenArea.screenPhysicalPixmapCopy()))
         # self.setPalette(palette)
 
-    def start(self):
+    def start(self, func_flag=FUNC_SELECT_DIALOG_WINDOW):
+        self._func_flag = func_flag
         self.screenArea.captureScreen()
         self.setGeometry(self.screenArea.screenPhysicalRectF().toRect())
         logger.info(
@@ -1068,28 +1071,33 @@ class ScreenShotWidget(QWidget):
             self.save2Clipboard()
             self.close()
 
-    def select_dialog(self):
+    def confirm_select_area(self):
         '''显示器分辨率1920*1080，放大率1.25，PhysicalRect的像素点和显示器的像素是一一对应的。
         _rt_center是LogicalRect，它的尺寸乘以1.25后和显示器的像素一一对应。将截图保存时用的是PhysicalRect的尺寸和数据。
         截屏需要在逻辑设备上截取，用逻辑坐标确定起止范围，和人眼在显示器上看到的效果一致。显示器物理分辨率1920*1080，显示放大率1.25，
         在逻辑设备上截屏后图片分辨率是（1920/1.25，1080/1.25），如想以屏幕的物理分辨率保存图像，则需要对截图乘以1.25后保存。
         '''
-        logger.info("Logical topLeft x: {}；y: {}".format(self.screenArea._rt_center.topLeft().x(),
+        if self._func_flag == FUNC_SELECT_DIALOG_WINDOW:
+            logger.debug("保存对话窗口坐标信息")
+        elif self._func_flag == FUNC_SELECT_MEMBER_LIST:
+            logger.debug("保存成员列表窗口坐标信息")
+        else:
+            logger.debug("未获得成员列表窗口坐标信息或对话窗口坐标信息！")
+
+        logger.debug("Logical topLeft x: {}；y: {}".format(self.screenArea._rt_center.topLeft().x(),
                                                          self.screenArea._rt_center.topLeft().y()))
-        logger.info(
+        logger.debug(
             "Logical bottomRight x: {}；y: {}".format(self.screenArea._rt_center.bottomRight().x(),
                                                      self.screenArea._rt_center.bottomRight().y()))
-        logger.info(
+        logger.debug(
             "centerLogicalRect w: {}; h: {}".format(self.screenArea.centerLogicalRectF().width(),
                                                     self.screenArea.centerLogicalRectF().height()))
-        logger.info(
+        logger.debug(
             "centerPhysicalRect w: {}; h: {}".format(self.screenArea.centerPhysicalRectF().width(),
                                                      self.screenArea.centerPhysicalRectF().height()))
 
         self.close()
 
-    def select_members(self):
-        self.close()
 
     def save2Clipboard(self):
         '''将截图区域复制到剪贴板'''
@@ -1144,18 +1152,38 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('选择对话窗口')
         self.screenShotWg = ScreenShotWidget()
         centralLayout = QVBoxLayout()
-        centralLayout.addWidget(QPushButton('开始截图', clicked=lambda: self.screenShot()))
-        centralLayout.addWidget(QPushButton('隐藏本窗口后截图', clicked=lambda: self.screenShot(True)))
+        # centralLayout.addWidget(QPushButton('开始截图', clicked=lambda: self.screenShot()))
+        centralLayout.addWidget(QPushButton('选择成员列表区域', clicked=lambda: self.screenShot(True, FUNC_SELECT_MEMBER_LIST)))
+        centralLayout.addWidget(QPushButton('选择聊天窗口区域', clicked=lambda: self.screenShot(True, FUNC_SELECT_DIALOG_WINDOW)))
         centralWidget = QWidget()
         centralWidget.setLayout(centralLayout)
         self.setCentralWidget(centralWidget)
 
-    def screenShot(self, hide=False):
+    def screenShot(self, hide=False, func_flag=FUNC_SELECT_DIALOG_WINDOW):
         if hide:
             self.showMinimized()
-        self.screenShotWg.start()
+        self.screenShotWg.start(func_flag)
 
 
+
+'''所有对象的生命周期，用缩进表示层级关系：
+QApplication：
+----MainWindow：
+--------ScreenShotWidget：
+------------ScreenArea：
+------------ScreenShotToolBar：
+
+QApplication：最外层对象，管理整个应用的启动和关闭。
+----MainWindow：主窗口对象，显示“选择成员列表窗口”按钮和“选择聊天区窗口”按钮，点击按钮后会调用ScreenShotWidget对象的start()方法。
+在成员列表窗口和聊天区窗口都选择好后，显示“开始分析”按钮，通知ScreenShotWidget定时截取成员列表窗口和聊天区窗口图片，并传递给AI类识别分析。
+--------ScreenShotWidget：主业务逻辑处理对象，负责分别存储聊天区坐标尺寸和成员列表区坐标尺寸信息。在MainWindow调用start()后，先清空截图区域，
+如截图的坐标、截图标记等等；然后调用update()产生一个事件唤醒paintEvent()，开始绘制初始截图区域。在鼠标左键按下时，会触发mousePressEvent()调用
+记录截图起始位置，设置开始进行截图标记；在鼠标移动时，会触发mouseMoveEvent()，实时更新截图结束鼠标位置，调用update()方法，触发paintEvent()
+重新绘制截图区域；在鼠标左键松开时，会触发mouseReleaseEvent()，将开始截图标记设置为已完成，并显示ScreenShotToolBar对象。
+------------ScreenArea：存放划定截图区域时的鼠标起始和结束位置坐标，在初始化时调用captureScreen()截取整个桌面的物理分辨率截图。
+------------ScreenShotToolBar：划定截图区域完成后显示的工具条，可选择保存截图到内存或文件，已修改为选择对话窗口和选择成员窗口。
+后续需要修改为“取消选择区域”，重新回到划定截图区域状态；“确定选择区域”，将选区坐标尺寸等信息传递给ScreenShotWidget保存。
+'''
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     translator = QtCore.QTranslator()  # 颜色选取窗口、字体选择窗口中文化
