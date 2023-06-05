@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import QRectF, QRect, QSizeF, QPointF, QPoint, QMarginsF
 from PyQt6.QtGui import QPainter, QPen, QPixmap, QColor, QAction, QIcon
 from ppocr.utils.logging import get_logger
+import datetime
+from apscheduler.schedulers.background import BackgroundScheduler
 
 logger = get_logger()
 
@@ -778,6 +780,9 @@ class ScreenShotWidget(QWidget):
         self.toolbar = ScreenShotToolBar(self)
         self.textInputWg = TextInputWidget(self)
         self._func_flag=FUNC_SELECT_DIALOG_WINDOW
+        self._selected_dialog_window = QRectF()
+        self._selected_member_list_window = QRectF()
+        self._sched = BackgroundScheduler(timezone='MST')
         # 设置 screenPixmap 为窗口背景
         # palette = QtGui.QPalette()
         # palette.setBrush(QtGui.QPalette.ColorRole.Window, QtGui.QBrush(self.screenArea.screenPhysicalPixmapCopy()))
@@ -1079,8 +1084,12 @@ class ScreenShotWidget(QWidget):
         '''
         if self._func_flag == FUNC_SELECT_DIALOG_WINDOW:
             logger.debug("保存对话窗口坐标信息")
+            self._selected_dialog_window = self.screenArea._rt_center
+            self.add_schedule_task(FUNC_SELECT_DIALOG_WINDOW)
         elif self._func_flag == FUNC_SELECT_MEMBER_LIST:
             logger.debug("保存成员列表窗口坐标信息")
+            self._selected_member_list_window = self.screenArea._rt_center
+            self.add_schedule_task(FUNC_SELECT_MEMBER_LIST)
         else:
             logger.debug("未获得成员列表窗口坐标信息或对话窗口坐标信息！")
 
@@ -1097,6 +1106,23 @@ class ScreenShotWidget(QWidget):
                                                      self.screenArea.centerPhysicalRectF().height()))
 
         self.close()
+
+
+    def job(self, name=""):
+        logger.debug("{}定时器任务执行".format(name))
+
+    '''定时器调用此方法，定时用保存的截图区域尺寸坐标进行截图，并通知AI方法进行检测识别'''
+    def add_schedule_task(self, func_flag=FUNC_SELECT_DIALOG_WINDOW):
+        logger.debug("添加定时器任务")
+        # self._sched.pause()
+        # sched = BackgroundScheduler(timezone='MST') #在类初始化方法中调用一次，此处不再调用
+        if self._func_flag == FUNC_SELECT_DIALOG_WINDOW:
+            self._sched.add_job(self.job, 'interval', id='FUNC_SELECT_DIALOG_WINDOW', seconds=10, args=['FUNC_SELECT_DIALOG_WINDOW'])
+        else:
+            self._sched.add_job(self.job, 'interval', id='FUNC_SELECT_MEMBER_LIST', seconds=10, args=['FUNC_SELECT_MEMBER_LIST'])
+
+        self._sched.start()
+
 
 
     def save2Clipboard(self):
@@ -1181,8 +1207,8 @@ QApplication：最外层对象，管理整个应用的启动和关闭。
 记录截图起始位置，设置开始进行截图标记；在鼠标移动时，会触发mouseMoveEvent()，实时更新截图结束鼠标位置，调用update()方法，触发paintEvent()
 重新绘制截图区域；在鼠标左键松开时，会触发mouseReleaseEvent()，将开始截图标记设置为已完成，并显示ScreenShotToolBar对象。
 ------------ScreenArea：存放划定截图区域时的鼠标起始和结束位置坐标，在初始化时调用captureScreen()截取整个桌面的物理分辨率截图。
-------------ScreenShotToolBar：划定截图区域完成后显示的工具条，可选择保存截图到内存或文件，已修改为选择对话窗口和选择成员窗口。
-后续需要修改为“取消选择区域”，重新回到划定截图区域状态；“确定选择区域”，将选区坐标尺寸等信息传递给ScreenShotWidget保存。
+------------ScreenShotToolBar：划定截图区域完成后显示的工具条，可选择保存截图到内存或文件。后续需要修改为“取消选择区域”，
+重新回到划定截图区域状态；“确定选择区域”，将选区坐标尺寸等信息传递给ScreenShotWidget保存。
 '''
 if __name__ == '__main__':
     app = QApplication(sys.argv)
